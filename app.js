@@ -345,7 +345,7 @@
     layers.sun = c;
   }
 
-  // the corona, painted once: a wide glow with long soft streamers
+  // the corona, painted once: a wide soft glow
   function paintCorona() {
     const { r } = scene.sun;
     const size = r * 7;
@@ -359,41 +359,6 @@
     glow.addColorStop(1, "rgba(255, 100, 50, 0)");
     g.fillStyle = glow;
     g.fillRect(0, 0, size, size);
-
-    // streamers are painted at a tenth of the size and scaled up: a soft blur everywhere,
-    // including browsers without canvas filters
-    const k = 0.1;
-    const small = document.createElement("canvas");
-    small.width = Math.ceil(size * k);
-    small.height = Math.ceil(size * k);
-    const sg = small.getContext("2d");
-    sg.scale(k, k);
-    for (let i = 0; i < 11; i += 1) {
-      const a = seeded(i * 3.7 + 1) * TAU;
-      const reach = r * (1.6 + seeded(i * 2.1) * 1.5);
-      const width = r * (0.1 + seeded(i * 4.3) * 0.16);
-      sg.save();
-      sg.translate(m, m);
-      sg.rotate(a);
-      const ray = sg.createLinearGradient(r * 0.9, 0, reach, 0);
-      ray.addColorStop(0, "rgba(255, 214, 130, 0.22)");
-      ray.addColorStop(1, "rgba(255, 180, 90, 0)");
-      sg.fillStyle = ray;
-      sg.beginPath();
-      sg.moveTo(r * 0.92, -width);
-      sg.quadraticCurveTo(reach * 0.6, -width * 0.25, reach, 0);
-      sg.quadraticCurveTo(reach * 0.6, width * 0.25, r * 0.92, width);
-      sg.fill();
-      sg.restore();
-    }
-    const mid = document.createElement("canvas");
-    mid.width = Math.ceil(size * 0.3);
-    mid.height = Math.ceil(size * 0.3);
-    const mg = mid.getContext("2d");
-    mg.imageSmoothingQuality = "high";
-    mg.drawImage(small, 0, 0, mid.width, mid.height);
-    g.imageSmoothingQuality = "high";
-    g.drawImage(mid, 0, 0, size, size);
 
     layers.corona = c;
   }
