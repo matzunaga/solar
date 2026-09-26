@@ -153,7 +153,13 @@
       const textTop = intro.getBoundingClientRect().top || h * 0.8;
       const earthY = h * 0.6 + Math.max(0, textTop - (h * 0.6 + earthR)) * 0.75;
       scene.earth = { x: w * 0.5, y: earthY, r: earthR };
+
+      // the reading starts where the intro started, so the space under the Earth holds
+      reading.style.top = `${textTop}px`;
+      reading.style.bottom = "auto";
     } else {
+      reading.style.top = "";
+      reading.style.bottom = "";
       scene.sun = { x: w * 0.05, y: h * 0.5, r: Math.min(h * 0.38, w * 0.26) };
       scene.earth = { x: w * 0.875, y: h * 0.47, r: Math.min(h * 0.15, w * 0.1) };
     }
