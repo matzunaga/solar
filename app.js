@@ -56,7 +56,8 @@
     height: 0,
     dpr: 1,
     aurora: 0,
-    soundOn: false
+    soundOn: false,
+    reveal: 0
   };
 
   const scene = {
@@ -141,6 +142,7 @@
     const w = state.width;
     const h = state.height;
     const portrait = h > w * 1.1;
+    scene.portrait = portrait;
 
     if (portrait) {
       // the Sun hangs below the masthead so the text stays on dark sky
@@ -174,6 +176,7 @@
 
     [layers.trails, layers.trailsCtx] = makeCanvas(w, h);
     particles.length = 0;
+    if (state.running) warmUp();
   }
 
   /* The Earth's axis follows the season: tipped toward the Sun in June, away in December */
@@ -342,7 +345,7 @@
     layers.sun = c;
   }
 
-  // the corona, painted once and blurred: a wide glow with long soft streamers
+  // the corona, painted once: a wide glow with long soft streamers
   function paintCorona() {
     const { r } = scene.sun;
     const size = r * 7;
@@ -357,26 +360,40 @@
     g.fillStyle = glow;
     g.fillRect(0, 0, size, size);
 
-    g.filter = `blur(${Math.round(r * 0.08)}px)`;
+    // streamers are painted at a tenth of the size and scaled up: a soft blur everywhere,
+    // including browsers without canvas filters
+    const k = 0.1;
+    const small = document.createElement("canvas");
+    small.width = Math.ceil(size * k);
+    small.height = Math.ceil(size * k);
+    const sg = small.getContext("2d");
+    sg.scale(k, k);
     for (let i = 0; i < 11; i += 1) {
       const a = seeded(i * 3.7 + 1) * TAU;
       const reach = r * (1.6 + seeded(i * 2.1) * 1.5);
       const width = r * (0.1 + seeded(i * 4.3) * 0.16);
-      g.save();
-      g.translate(m, m);
-      g.rotate(a);
-      const ray = g.createLinearGradient(r * 0.9, 0, reach, 0);
+      sg.save();
+      sg.translate(m, m);
+      sg.rotate(a);
+      const ray = sg.createLinearGradient(r * 0.9, 0, reach, 0);
       ray.addColorStop(0, "rgba(255, 214, 130, 0.22)");
       ray.addColorStop(1, "rgba(255, 180, 90, 0)");
-      g.fillStyle = ray;
-      g.beginPath();
-      g.moveTo(r * 0.92, -width);
-      g.quadraticCurveTo(reach * 0.6, -width * 0.25, reach, 0);
-      g.quadraticCurveTo(reach * 0.6, width * 0.25, r * 0.92, width);
-      g.fill();
-      g.restore();
+      sg.fillStyle = ray;
+      sg.beginPath();
+      sg.moveTo(r * 0.92, -width);
+      sg.quadraticCurveTo(reach * 0.6, -width * 0.25, reach, 0);
+      sg.quadraticCurveTo(reach * 0.6, width * 0.25, r * 0.92, width);
+      sg.fill();
+      sg.restore();
     }
-    g.filter = "none";
+    const mid = document.createElement("canvas");
+    mid.width = Math.ceil(size * 0.3);
+    mid.height = Math.ceil(size * 0.3);
+    const mg = mid.getContext("2d");
+    mg.imageSmoothingQuality = "high";
+    mg.drawImage(small, 0, 0, mid.width, mid.height);
+    g.imageSmoothingQuality = "high";
+    g.drawImage(mid, 0, 0, size, size);
 
     layers.corona = c;
   }
@@ -492,11 +509,18 @@
     return (scene.distance * vis.speed) / 3600;
   }
 
+  function warmUp() {
+    particles.length = 0;
+    layers.trailsCtx.clearRect(0, 0, state.width, state.height);
+    for (let i = 0; i < 16 * 30; i += 1) stepParticles(1 / 30, state.clock + i / 30);
+    state.reveal = 0;
+  }
+
   function spawn() {
     const { sun, axis } = scene;
     const spread = (Math.random() + Math.random() - 1) * 0.75;
     const angle = Math.atan2(axis.y, axis.x) + spread;
-    const d = sun.r * (0.98 + Math.random() * 0.08);
+    const d = sun.r * (0.72 + Math.random() * 0.24); // under the disc, so they emerge at its edge
 
     particles.push({
       x: sun.x + Math.cos(angle) * d,
@@ -535,7 +559,7 @@
     const heat = clamp(Math.log10(vis.temperature / 2e4) / 1.5, 0, 1);
     const stir = U * (0.14 + heat * 0.22);
     const south = clamp(-vis.bz / 10, 0, 1);
-    const target = clamp((240 + Math.sqrt(vis.density) * 110) * ((state.width * state.height) / 1.3e6), 140, 700);
+    const target = clamp((380 + Math.sqrt(vis.density) * 175) * ((state.width * state.height) / 1.3e6), 320, 1100);
 
     let births = Math.min(60, Math.ceil((target / 12) * dt));
     while (births-- > 0 && particles.length < target) spawn();
@@ -684,7 +708,7 @@
 
     for (const p of particles) {
       if (p.px === undefined) continue;
-      const fadeIn = smooth(0, 0.8, p.age);
+      const fadeIn = smooth(0, 0.25, p.age);
       const fadeOut = (1 - smooth(p.life - 2, p.life, p.age)) * (1 - (p.downstream || 0) * 0.85);
       const travelled = clamp(Math.hypot(p.x - scene.sun.x, p.y - scene.sun.y) / scene.distance, 0, 1);
       const nearShock = p.hold || 0;
@@ -718,9 +742,12 @@
 
   /* ---------- Drawing ---------- */
 
-  function drawSun(t) {
-    const { x, y, r } = scene.sun;
-    const flare = clamp((Math.log10(vis.flare) + 7) / 3, 0, 1); // B = 0, C ≈ 0.33, M ≈ 0.67, X = 1
+  // flare strength from the X-ray class: B = 0, C ≈ 0.33, M ≈ 0.67, X = 1
+  const flareLevel = () => clamp((Math.log10(vis.flare) + 7) / 3, 0, 1);
+
+  function drawCorona(t) {
+    const { x, y } = scene.sun;
+    const flare = flareLevel();
     const breathe = 1 + Math.sin(t * 0.35) * 0.03 + Math.sin(t * 0.13) * 0.02;
 
     ctx.save();
@@ -733,6 +760,11 @@
     ctx.drawImage(layers.corona, -size / 2, -size / 2, size, size);
 
     ctx.restore();
+  }
+
+  function drawDisc(t) {
+    const { x, y, r } = scene.sun;
+    const flare = flareLevel();
 
     // the disc itself, turning very slowly
     const disc = layers.sun.width / state.dpr;
@@ -764,9 +796,10 @@
     const { x, y, r } = scene.sun;
     surfacePattern = surfacePattern || ctx.createPattern(surface, "repeat");
     const tile = (r * 1.1) / surface.width;
+    const pace = scene.portrait ? 0.5 : 1; // the phone's smaller Sun reads faster, so slow it
     const layersOf = [
-      { scale: tile, dx: 7, dy: 2.5, phase: 0 },
-      { scale: tile * 0.62, dx: -4.5, dy: 5, phase: Math.PI }
+      { scale: tile, dx: 7 * pace, dy: 2.5 * pace, phase: 0 },
+      { scale: tile * 0.62, dx: -4.5 * pace, dy: 5 * pace, phase: Math.PI }
     ];
 
     ctx.save();
@@ -776,7 +809,7 @@
     ctx.globalCompositeOperation = "soft-light";
 
     for (const layer of layersOf) {
-      const weight = 0.5 + 0.5 * Math.sin(t * 0.22 + layer.phase);
+      const weight = 0.5 + 0.5 * Math.sin(t * 0.22 * pace + layer.phase);
       surfacePattern.setTransform(
         new DOMMatrix()
           .translate(x + layer.dx * t, y + layer.dy * t)
@@ -935,13 +968,17 @@
 
     ctx.globalCompositeOperation = "source-over";
     ctx.drawImage(layers.stars, 0, 0, state.width, state.height);
-    drawSun(t);
+    drawCorona(t);
 
     drawStreams(dt * pace);
+    state.reveal = Math.min(1, state.reveal + dt / 1.5);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = smooth(0, 1, state.reveal);
     ctx.drawImage(layers.trails, 0, 0, state.width, state.height);
     ctx.restore();
+
+    drawDisc(t);
 
     if (state.running) drawL1();
     drawEarth(scene.spin0 + (t / SPIN_SECONDS) * TAU);
@@ -1155,6 +1192,7 @@
     void reading.offsetWidth; // lay out the reading first so it fades in
     document.body.classList.add("running");
     startButton.textContent = "Pause";
+    warmUp();
     updateSound();
   }
 
