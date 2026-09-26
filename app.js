@@ -148,10 +148,10 @@
       // the Sun hangs below the masthead so the text stays on dark sky
       const sunR = Math.min(w * 0.3, h * 0.15);
       scene.sun = { x: w * 0.5, y: Math.max(h * 0.2, 80 + sunR), r: sunR };
-      // the Earth sits halfway between its old place and the text at the bottom
+      // the Earth sits three quarters of the way from its old place down to the text at the bottom
       const earthR = Math.min(w * 0.17, h * 0.08);
       const textTop = intro.getBoundingClientRect().top || h * 0.8;
-      const earthY = h * 0.6 + Math.max(0, textTop - (h * 0.6 + earthR)) / 2;
+      const earthY = h * 0.6 + Math.max(0, textTop - (h * 0.6 + earthR)) * 0.75;
       scene.earth = { x: w * 0.5, y: earthY, r: earthR };
     } else {
       scene.sun = { x: w * 0.05, y: h * 0.5, r: Math.min(h * 0.38, w * 0.26) };
