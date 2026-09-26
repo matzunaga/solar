@@ -177,7 +177,7 @@ body.running .intro {
   bottom: calc(var(--bottom) + 72px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 1.4s ease 1.2s;
+  transition: opacity 1.4s ease 1.2s, top 1.8s ease, transform 0.6s ease;
 }
 
 body.running .reading {
@@ -452,6 +452,11 @@ noscript {
 
   .condition {
     font-size: 19px;
+  }
+
+  /* the reading sits just above the status line; it steps up when the controls return */
+  body.running.controls-visible .reading {
+    transform: translate(-50%, -52px);
   }
 
   .arrival {

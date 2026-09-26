@@ -57,7 +57,8 @@
     dpr: 1,
     aurora: 0,
     soundOn: false,
-    reveal: 0
+    reveal: 0,
+    shift: 0
   };
 
   const scene = {
@@ -153,22 +154,24 @@
       const textTop = intro.getBoundingClientRect().top || h * 0.8;
       const earthY = h * 0.6 + Math.max(0, textTop - (h * 0.6 + earthR)) * 0.75;
       scene.earth = { x: w * 0.5, y: earthY, r: earthR };
+      scene.restY = earthY;
+      scene.runY = earthY;
+      scene.gapBelow = textTop - (earthY + earthR);
 
       // the reading starts where the intro started, so the space under the Earth holds
       reading.style.top = `${textTop}px`;
       reading.style.bottom = "auto";
+      if (state.running) layoutRunning();
     } else {
       reading.style.top = "";
       reading.style.bottom = "";
       scene.sun = { x: w * 0.05, y: h * 0.5, r: Math.min(h * 0.38, w * 0.26) };
       scene.earth = { x: w * 0.875, y: h * 0.47, r: Math.min(h * 0.15, w * 0.1) };
+      scene.restY = scene.earth.y;
+      scene.runY = scene.earth.y;
     }
 
-    const dx = scene.earth.x - scene.sun.x;
-    const dy = scene.earth.y - scene.sun.y;
-    scene.distance = Math.hypot(dx, dy);
-    scene.axis = { x: dx / scene.distance, y: dy / scene.distance };
-    scene.normal = { x: -scene.axis.y, y: scene.axis.x };
+    placeEarth(mix(scene.restY, scene.runY, smooth(0, 1, state.shift)));
 
     // sunlight comes from the Sun's side and a little from behind the viewer
     scene.light = norm3([-scene.axis.x, -scene.axis.y, 0.42]);
@@ -214,6 +217,25 @@
     const subsolar = (-15 * (hours - 12) * Math.PI) / 180;
     const facing = Math.atan2(dot3(scene.light, r), dot3(scene.light, q));
     scene.spin0 = facing - subsolar;
+  }
+
+  function placeEarth(y) {
+    scene.earth.y = y;
+    const dx = scene.earth.x - scene.sun.x;
+    const dy = y - scene.sun.y;
+    scene.distance = Math.hypot(dx, dy);
+    scene.axis = { x: dx / scene.distance, y: dy / scene.distance };
+    scene.normal = { x: -scene.axis.y, y: scene.axis.x };
+  }
+
+  // on phones, once it runs, the reading settles just above the status line and the
+  // Earth follows it down, keeping the same space between them and opening the sky above
+  function layoutRunning() {
+    if (!scene.portrait) return;
+    const statusTop = statusEl.getBoundingClientRect().top;
+    const top = statusTop - 10 - (reading.offsetHeight || 50);
+    reading.style.top = `${top}px`;
+    scene.runY = top - scene.gapBelow - scene.earth.r;
   }
 
   function toScreen(cl, sl, lon, spin) {
@@ -935,6 +957,11 @@
     const t = state.clock;
     ease(dt);
 
+    // glide the Earth between its resting and running places
+    state.shift += ((state.running ? 1 : 0) - state.shift) * (1 - Math.exp(-dt * 1.6));
+    const earthY = mix(scene.restY, scene.runY, smooth(0, 1, state.shift));
+    if (Math.abs(earthY - scene.earth.y) > 0.05) placeEarth(earthY);
+
     if (state.running) stepParticles(dt * pace, t);
 
     ctx.globalCompositeOperation = "source-over";
@@ -1163,6 +1190,7 @@
     void reading.offsetWidth; // lay out the reading first so it fades in
     document.body.classList.add("running");
     startButton.textContent = "Pause";
+    layoutRunning();
     warmUp();
     updateSound();
   }
