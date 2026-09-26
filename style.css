@@ -157,7 +157,7 @@ h1 {
   position: fixed;
   z-index: 1;
   left: 50%;
-  width: min(520px, calc(100vw - 48px));
+  width: min(980px, calc(100vw - 48px));
   transform: translateX(-50%);
   text-align: center;
 }
@@ -177,11 +177,16 @@ body.running .intro {
   bottom: calc(var(--bottom) + 72px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 1.4s ease 1.2s;
+  transition: opacity 1.4s ease 1.2s, transform 0.6s ease;
 }
 
 body.running .reading {
   opacity: 1;
+}
+
+/* when the controls come back, the reading steps up out of their way */
+body.running.controls-visible .reading {
+  transform: translate(-50%, -42px);
 }
 
 .instruction,
@@ -193,13 +198,18 @@ body.running .reading {
   text-wrap: balance;
 }
 
+/* on wide screens each line of copy stays on one line */
 .instruction {
-  font-size: clamp(24px, 3.5vw, 38px);
+  font-size: clamp(22px, 2.5vw, 34px);
   line-height: 1.1;
 }
 
+.instruction br {
+  display: none;
+}
+
 .condition {
-  font-size: clamp(22px, 3vw, 34px);
+  font-size: clamp(20px, 2.3vw, 32px);
   line-height: 1.14;
 }
 
@@ -302,6 +312,10 @@ body.running.controls-visible .controls {
 
 body.running .status {
   opacity: 0.5;
+}
+
+body.running.controls-visible .status {
+  opacity: 0;
 }
 
 /* Cards */
@@ -430,16 +444,28 @@ noscript {
   }
 
   .intro {
-    bottom: calc(var(--bottom) + 85px);
+    bottom: calc(var(--bottom) + 76px);
   }
 
-  .reading {
-    bottom: calc(var(--bottom) + 64px);
-  }
-
-  .instruction,
-  .condition {
+  .instruction {
     font-size: 24px;
+  }
+
+  .instruction br {
+    display: inline;
+  }
+
+  /* the controls hide while it runs, so the reading can sit low and small */
+  .reading {
+    bottom: calc(var(--bottom) + 30px);
+  }
+
+  .condition {
+    font-size: 19px;
+  }
+
+  .arrival {
+    margin-top: 10px;
   }
 
   .mark-card,

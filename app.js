@@ -70,8 +70,8 @@
     spin0: 0
   };
 
-  const layers = { stars: null, sun: null, corona: null, earth: null, smoke: null, smokeCtx: null };
-  const sprites = [];
+  const layers = { stars: null, sun: null, corona: null, earth: null, trails: null, trailsCtx: null };
+  const sprites = {};
   const particles = [];
 
   /* ---------- Land lattice ---------- */
@@ -172,7 +172,7 @@
     paintEarth();
     makeSprites();
 
-    [layers.smoke, layers.smokeCtx] = makeCanvas(w, h);
+    [layers.trails, layers.trailsCtx] = makeCanvas(w, h);
     particles.length = 0;
   }
 
@@ -449,27 +449,8 @@
     layers.earth = c;
   }
 
-  /* Soft round sprites for the smoke, from white-gold near the Sun to rose at the shock */
+  // a soft green glow for the aurora
   function makeSprites() {
-    sprites.length = 0;
-    const colors = [
-      [255, 246, 222], // white-gold at the Sun
-      [255, 222, 164], // pale gold in flight
-      [236, 214, 196], // warm ash as it cools
-      [255, 206, 170] // brighter where it piles up at the bubble
-    ];
-
-    for (const [red, green, blue] of colors) {
-      const [c, g] = makeCanvas(32, 32);
-      const soft = g.createRadialGradient(16, 16, 0, 16, 16, 16);
-      soft.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 1)`);
-      soft.addColorStop(0.35, `rgba(${red}, ${green}, ${blue}, 0.45)`);
-      soft.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
-      g.fillStyle = soft;
-      g.fillRect(0, 0, 32, 32);
-      sprites.push(c);
-    }
-
     const [c, g] = makeCanvas(32, 32);
     const green = g.createRadialGradient(16, 16, 0, 16, 16, 16);
     green.addColorStop(0, "rgba(120, 255, 170, 1)");
@@ -554,7 +535,7 @@
     const heat = clamp(Math.log10(vis.temperature / 2e4) / 1.5, 0, 1);
     const stir = U * (0.14 + heat * 0.22);
     const south = clamp(-vis.bz / 10, 0, 1);
-    const target = clamp((480 + Math.sqrt(vis.density) * 220) * ((state.width * state.height) / 1.3e6), 280, 1400);
+    const target = clamp((240 + Math.sqrt(vis.density) * 110) * ((state.width * state.height) / 1.3e6), 140, 700);
 
     let births = Math.min(60, Math.ceil((target / 12) * dt));
     while (births-- > 0 && particles.length < target) spawn();
@@ -605,7 +586,7 @@
         fx = (fx / fl) * U;
         fy = (fy / fl) * U;
 
-        // the magnetic bubble parts the stream: near the boundary the smoke turns to run along it
+        // the magnetic bubble parts the stream: near the boundary the particles turn to run along it
         const g0 = gap(lx, ly, b, alpha);
         const layer = b * 1.4;
         vx = fx;
@@ -629,7 +610,7 @@
           const front = smooth(-0.2, 0.8, -lx / Math.max(r, 1)); // slowest at the sunward nose
 
           // split the stream into parts across and along the boundary; the part heading
-          // into it fades as the gap closes, so the smoke thickens into a sheath and slides past
+          // into it fades as the gap closes, so the particles crowd into a sheath and slide past
           const fu = fx * axis.x + fy * axis.y;
           const fv = fx * normal.x + fy * normal.y;
           let across = fu * nx + fv * ny;
@@ -665,6 +646,8 @@
       const calm = smooth(sun.r * 0.9, sun.r * 1.6, Math.hypot(p.x - sun.x, p.y - sun.y)) * (1 - (p.hold || 0) * 0.8);
       p.vx = vx + swirl.x * stir * calm;
       p.vy = vy + swirl.y * stir * calm;
+      p.px = p.x;
+      p.py = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.downstream = smooth(0, b * 3.5, lx);
@@ -676,38 +659,61 @@
     }
   }
 
-  function drawSmoke(dt) {
-    const g = layers.smokeCtx;
+  // white-gold at the Sun, pale gold in flight, warm ash as it cools, brighter where it piles up
+  const TONES = [
+    [255, 246, 222],
+    [255, 222, 164],
+    [236, 214, 196],
+    [255, 206, 170]
+  ];
+  const LEVELS = 5;
+  const strokes = Array.from({ length: TONES.length * LEVELS }, () => []);
+
+  function drawStreams(dt) {
+    const g = layers.trailsCtx;
     const w = state.width;
     const h = state.height;
 
-    // let the old smoke thin away so the new smoke leaves trails
+    // old segments fade, so each particle trails a short tail behind it
     g.globalCompositeOperation = "destination-out";
-    g.fillStyle = `rgba(0, 0, 0, ${1 - Math.pow(0.93, dt * 60)})`;
+    g.fillStyle = `rgba(0, 0, 0, ${1 - Math.pow(0.86, dt * 60)})`;
     g.fillRect(0, 0, w, h);
 
-    g.globalCompositeOperation = "lighter";
-    const thickness = clamp(0.35 + Math.sqrt(vis.density) / 6, 0.4, 1.1);
-    const U = flowSpeed();
+    for (const bucket of strokes) bucket.length = 0;
+    const thickness = clamp(0.5 + Math.sqrt(vis.density) / 8, 0.55, 1);
 
     for (const p of particles) {
+      if (p.px === undefined) continue;
       const fadeIn = smooth(0, 0.8, p.age);
       const fadeOut = (1 - smooth(p.life - 2, p.life, p.age)) * (1 - (p.downstream || 0) * 0.85);
       const travelled = clamp(Math.hypot(p.x - scene.sun.x, p.y - scene.sun.y) / scene.distance, 0, 1);
       const nearShock = p.hold || 0;
-      const slow = p.vx !== undefined ? 1 - clamp(Math.hypot(p.vx, p.vy) / U, 0, 1) : 0;
 
       let tone = Math.min(2, Math.floor(travelled * 3));
       if (nearShock > 0.35 || p.captured) tone = 3;
 
-      const alpha = 0.036 * thickness * fadeIn * fadeOut * (1 + nearShock * 0.25 + slow * 0.2);
-      const size = (5 + p.size * 8) * (1 + p.age * 0.1) * (1 + nearShock * 0.3);
-
-      g.globalAlpha = Math.min(0.5, alpha);
-      g.drawImage(sprites[tone], p.x - size, p.y - size, size * 2, size * 2);
+      const alpha = thickness * fadeIn * fadeOut * (0.55 + nearShock * 0.45);
+      const level = Math.min(LEVELS - 1, Math.floor(alpha * LEVELS));
+      if (alpha < 0.04) continue;
+      strokes[tone * LEVELS + level].push(p.px, p.py, p.x, p.y);
     }
 
-    g.globalAlpha = 1;
+    g.globalCompositeOperation = "lighter";
+    g.lineCap = "round";
+    g.lineWidth = 0.9;
+
+    strokes.forEach((bucket, index) => {
+      if (!bucket.length) return;
+      const [red, green, blue] = TONES[Math.floor(index / LEVELS)];
+      const level = (index % LEVELS) + 1;
+      g.strokeStyle = `rgba(${red}, ${green}, ${blue}, ${(level / LEVELS) * 0.8})`;
+      g.beginPath();
+      for (let i = 0; i < bucket.length; i += 4) {
+        g.moveTo(bucket[i], bucket[i + 1]);
+        g.lineTo(bucket[i + 2], bucket[i + 3]);
+      }
+      g.stroke();
+    });
   }
 
   /* ---------- Drawing ---------- */
@@ -759,8 +765,8 @@
     surfacePattern = surfacePattern || ctx.createPattern(surface, "repeat");
     const tile = (r * 1.1) / surface.width;
     const layersOf = [
-      { scale: tile, dx: 3.2, dy: 1.1, phase: 0 },
-      { scale: tile * 0.62, dx: -2.1, dy: 2.4, phase: Math.PI }
+      { scale: tile, dx: 7, dy: 2.5, phase: 0 },
+      { scale: tile * 0.62, dx: -4.5, dy: 5, phase: Math.PI }
     ];
 
     ctx.save();
@@ -770,13 +776,13 @@
     ctx.globalCompositeOperation = "soft-light";
 
     for (const layer of layersOf) {
-      const weight = 0.5 + 0.5 * Math.sin(t * 0.09 + layer.phase);
+      const weight = 0.5 + 0.5 * Math.sin(t * 0.22 + layer.phase);
       surfacePattern.setTransform(
         new DOMMatrix()
           .translate(x + layer.dx * t, y + layer.dy * t)
           .scale(layer.scale)
       );
-      ctx.globalAlpha = 0.14 + 0.12 * weight;
+      ctx.globalAlpha = 0.3 + 0.3 * weight;
       ctx.fillStyle = surfacePattern;
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
@@ -931,10 +937,10 @@
     ctx.drawImage(layers.stars, 0, 0, state.width, state.height);
     drawSun(t);
 
-    drawSmoke(dt * pace);
+    drawStreams(dt * pace);
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(layers.smoke, 0, 0, state.width, state.height);
+    ctx.drawImage(layers.trails, 0, 0, state.width, state.height);
     ctx.restore();
 
     if (state.running) drawL1();
@@ -960,6 +966,18 @@
       value: values.reduce((sum, row) => sum + row[key], 0) / values.length,
       time: new Date(`${values[0].time_tag}Z`)
     };
+  }
+
+  // Kp is estimated in three-hour windows and restarts near zero as each one opens,
+  // so for the first half hour of a window keep the one that just closed
+  function latestKp(rows) {
+    const latest = rows[rows.length - 1];
+    const time = new Date(`${latest.time_tag}Z`);
+    const opened = Date.UTC(time.getUTCFullYear(), time.getUTCMonth(), time.getUTCDate(), Math.floor(time.getUTCHours() / 3) * 3);
+    if (time - opened >= 30 * 60 * 1000) return latest.estimated_kp;
+
+    const before = rows.filter((row) => new Date(`${row.time_tag}Z`) < opened);
+    return before.length ? before[before.length - 1].estimated_kp : latest.estimated_kp;
   }
 
   function flareFlux(label) {
@@ -1000,8 +1018,8 @@
     }
 
     if (kp.status === "fulfilled" && kp.value.length) {
-      const latest = kp.value[kp.value.length - 1];
-      if (Number.isFinite(latest.estimated_kp)) data.kp = latest.estimated_kp;
+      const latest = latestKp(kp.value);
+      if (Number.isFinite(latest)) data.kp = latest;
     }
 
     if (flare.status === "fulfilled" && flare.value.length) {
