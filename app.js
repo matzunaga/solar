@@ -146,10 +146,14 @@
       // the Sun hangs below the masthead so the text stays on dark sky
       const sunR = Math.min(w * 0.3, h * 0.15);
       scene.sun = { x: w * 0.5, y: Math.max(h * 0.2, 80 + sunR), r: sunR };
-      scene.earth = { x: w * 0.5, y: h * 0.6, r: Math.min(w * 0.17, h * 0.08) };
+      // the Earth sits halfway between its old place and the text at the bottom
+      const earthR = Math.min(w * 0.17, h * 0.08);
+      const textTop = intro.getBoundingClientRect().top || h * 0.8;
+      const earthY = h * 0.6 + Math.max(0, textTop - (h * 0.6 + earthR)) / 2;
+      scene.earth = { x: w * 0.5, y: earthY, r: earthR };
     } else {
       scene.sun = { x: w * 0.05, y: h * 0.5, r: Math.min(h * 0.38, w * 0.26) };
-      scene.earth = { x: w * 0.75, y: h * 0.47, r: Math.min(h * 0.15, w * 0.1) };
+      scene.earth = { x: w * 0.875, y: h * 0.47, r: Math.min(h * 0.15, w * 0.1) };
     }
 
     const dx = scene.earth.x - scene.sun.x;
@@ -248,6 +252,58 @@
     layers.stars = c;
   }
 
+  // a seamless tile of fractal noise for the Sun's surface, made once
+  const surface = (() => {
+    const size = 256;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const g = c.getContext("2d");
+    const image = g.createImageData(size, size);
+    const field = new Float32Array(size * size);
+    let low = Infinity;
+    let high = -Infinity;
+
+    for (let octave = 0; octave < 5; octave += 1) {
+      const cells = 6 * 2 ** octave; // lattice wraps at the tile edge, so the tile repeats cleanly
+      const weight = 0.55 ** octave;
+      const lattice = Array.from({ length: cells * cells }, (_, i) => seeded(i * 1.7 + octave * 97.3));
+      const at = (x, y) => lattice[(y % cells) * cells + (x % cells)];
+
+      for (let y = 0; y < size; y += 1) {
+        const gy = (y / size) * cells;
+        const y0 = Math.floor(gy);
+        const ty = gy - y0;
+        const sy = ty * ty * (3 - 2 * ty);
+        for (let x = 0; x < size; x += 1) {
+          const gx = (x / size) * cells;
+          const x0 = Math.floor(gx);
+          const tx = gx - x0;
+          const sx = tx * tx * (3 - 2 * tx);
+          const top = mix(at(x0, y0), at(x0 + 1, y0), sx);
+          const bottom = mix(at(x0, y0 + 1), at(x0 + 1, y0 + 1), sx);
+          field[y * size + x] += mix(top, bottom, sy) * weight;
+        }
+      }
+    }
+
+    for (const v of field) {
+      low = Math.min(low, v);
+      high = Math.max(high, v);
+    }
+
+    for (let i = 0; i < field.length; i += 1) {
+      const v = Math.round(((field[i] - low) / (high - low)) * 255);
+      image.data[i * 4] = v;
+      image.data[i * 4 + 1] = v;
+      image.data[i * 4 + 2] = v;
+      image.data[i * 4 + 3] = 255;
+    }
+
+    g.putImageData(image, 0, 0);
+    return c;
+  })();
+
   function paintSun() {
     const { r } = scene.sun;
     const size = r * 2 + 4;
@@ -271,12 +327,12 @@
     g.beginPath();
     g.arc(m, m, r, 0, TAU);
     g.clip();
-    const cells = Math.floor(r * r * 0.06);
+    const cells = Math.floor(r * r * 0.025);
     for (let i = 0; i < cells; i += 1) {
       const a = seeded(i * 2.3) * TAU;
       const d = Math.sqrt(seeded(i * 5.9 + 1)) * r;
       const s = 1 + seeded(i * 8.3) * 2.6;
-      g.fillStyle = seeded(i * 6.1) > 0.5 ? "rgba(255, 255, 240, 0.07)" : "rgba(200, 110, 20, 0.06)";
+      g.fillStyle = seeded(i * 6.1) > 0.5 ? "rgba(255, 255, 240, 0.05)" : "rgba(200, 110, 20, 0.04)";
       g.beginPath();
       g.arc(m + Math.cos(a) * d, m + Math.sin(a) * d, s, 0, TAU);
       g.fill();
@@ -498,7 +554,7 @@
     const heat = clamp(Math.log10(vis.temperature / 2e4) / 1.5, 0, 1);
     const stir = U * (0.14 + heat * 0.22);
     const south = clamp(-vis.bz / 10, 0, 1);
-    const target = clamp((900 + Math.sqrt(vis.density) * 420) * ((state.width * state.height) / 1.3e6), 500, 2600);
+    const target = clamp((480 + Math.sqrt(vis.density) * 220) * ((state.width * state.height) / 1.3e6), 280, 1400);
 
     let births = Math.min(60, Math.ceil((target / 12) * dt));
     while (births-- > 0 && particles.length < target) spawn();
@@ -644,7 +700,7 @@
       let tone = Math.min(2, Math.floor(travelled * 3));
       if (nearShock > 0.35 || p.captured) tone = 3;
 
-      const alpha = 0.028 * thickness * fadeIn * fadeOut * (1 + nearShock * 0.25 + slow * 0.2);
+      const alpha = 0.036 * thickness * fadeIn * fadeOut * (1 + nearShock * 0.25 + slow * 0.2);
       const size = (5 + p.size * 8) * (1 + p.age * 0.1) * (1 + nearShock * 0.3);
 
       g.globalAlpha = Math.min(0.5, alpha);
@@ -680,6 +736,8 @@
     ctx.drawImage(layers.sun, -disc / 2, -disc / 2, disc, disc);
     ctx.restore();
 
+    drawSurface(t);
+
     // a flare lifts the whole disc
     if (flare > 0.3) {
       ctx.save();
@@ -691,6 +749,39 @@
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  // the surface stirs: two layers of fractal noise drift apart and cross-fade, just enough to see
+  let surfacePattern = null;
+
+  function drawSurface(t) {
+    const { x, y, r } = scene.sun;
+    surfacePattern = surfacePattern || ctx.createPattern(surface, "repeat");
+    const tile = (r * 1.1) / surface.width;
+    const layersOf = [
+      { scale: tile, dx: 3.2, dy: 1.1, phase: 0 },
+      { scale: tile * 0.62, dx: -2.1, dy: 2.4, phase: Math.PI }
+    ];
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.995, 0, TAU);
+    ctx.clip();
+    ctx.globalCompositeOperation = "soft-light";
+
+    for (const layer of layersOf) {
+      const weight = 0.5 + 0.5 * Math.sin(t * 0.09 + layer.phase);
+      surfacePattern.setTransform(
+        new DOMMatrix()
+          .translate(x + layer.dx * t, y + layer.dy * t)
+          .scale(layer.scale)
+      );
+      ctx.globalAlpha = 0.14 + 0.12 * weight;
+      ctx.fillStyle = surfacePattern;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+
+    ctx.restore();
   }
 
   const buckets = Array.from({ length: 10 }, () => []);
