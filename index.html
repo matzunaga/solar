@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#04050a" />
+  <meta name="description" content="Solar — the live wind from the Sun, streaming past the Earth." />
+  <title>Solar</title>
+  <link rel="stylesheet" href="style.css?v=1" />
+</head>
+<body>
+  <main class="experience" aria-labelledby="title">
+    <canvas id="sky" aria-label="The Sun on one side, the Earth on the other, and the solar wind streaming between them"></canvas>
+    <div class="grain" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <button
+        class="mark"
+        id="mark"
+        type="button"
+        aria-label="What 陽 means"
+        aria-expanded="false"
+        aria-controls="markCard"
+      >
+        陽
+      </button>
+      <h1 id="title">Solar</h1>
+    </header>
+
+    <aside class="mark-card" id="markCard" aria-label="What 陽 means" hidden>
+      <p class="mark-title">陽 <span>yō</span></p>
+
+      <p>
+        The sun, sunlight, the bright side of things: the yang of yin and
+        yang.
+      </p>
+
+      <p>
+        In Japanese the solar wind is 太陽風, taiyōfū: the wind of the great
+        yang.
+      </p>
+    </aside>
+
+    <div class="meta">
+      <p class="label">Solar wind at L1</p>
+      <p class="details" id="details" hidden></p>
+    </div>
+
+    <section class="intro" id="intro">
+      <p class="instruction">
+        A wind is leaving the Sun.<br />
+        Watch it reach the Earth.
+      </p>
+      <p class="hint">Press space or tap Begin.</p>
+    </section>
+
+    <section class="reading" id="reading" aria-live="polite" hidden>
+      <p class="condition" id="condition">Listening for the Sun.</p>
+      <p class="arrival" id="arrival"></p>
+    </section>
+
+    <div class="controls" id="controls">
+      <button class="ctrl ctrl-start" id="start" type="button">Begin</button>
+
+      <span class="ctrl-divider" aria-hidden="true"></span>
+
+      <button class="ctrl" id="soundToggle" type="button" aria-pressed="false">
+        Sound: Off
+      </button>
+
+      <button
+        class="ctrl ctrl-info"
+        id="aboutButton"
+        type="button"
+        aria-expanded="false"
+        aria-controls="aboutPanel"
+        aria-label="About Solar"
+      >
+        i
+      </button>
+    </div>
+
+    <p class="status" id="status" role="status">Loading the solar wind.</p>
+
+    <aside class="about-panel" id="aboutPanel" hidden>
+      <button class="close-about" id="closeAbout" type="button" aria-label="Close information">
+        ×
+      </button>
+
+      <p>
+        <em>Solar</em> follows the wind blowing from the Sun right now, measured
+        by a spacecraft at L1, a million miles sunward of Earth.
+      </p>
+
+      <p>
+        Its speed moves the smoke, its density thickens it, and its pressure
+        sizes the magnetic bubble that turns it aside. When its field points
+        south, some of it slips in at the poles and the auroras brighten.
+      </p>
+
+      <p>
+        The Earth shows the real season and starts facing the Sun as it does
+        now, then turns faster than life. Distances are not to scale.
+      </p>
+
+      <p class="attribution">
+        Data by
+        <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA Space Weather Prediction Center</a>.
+        Map from
+        <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>.
+      </p>
+    </aside>
+  </main>
+
+  <noscript>This piece needs JavaScript to follow the solar wind.</noscript>
+
+  <script src="land.js?v=1"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
